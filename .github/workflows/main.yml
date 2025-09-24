@@ -1,0 +1,88 @@
+build-docker:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build Client Assets
+      run: |
+        cd client
+        npm ci
+        npm run build
+    
+    - name: Build DAW Assets
+      run: |
+        cd daw
+        npm ci
+        npm run build
+    
+    - name: Build and Push Client Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./client
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/wavs-client:latest
+          ${{ secrets.DOCKER_USERNAME }}/wavs-client:${{ github.sha }}
+    
+    - name: Build and Push DAW Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./daw
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/wavs-daw:latest
+          ${{ secrets.DOCKER_USERNAME }}/wavs-daw:${{ github.sha }}
+    
+    - name: Build and Push Server Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./server
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/wavs-server:latest
+          ${{ secrets.DOCKER_USERNAME }}/wavs-server:${{ github.sha }}
+    
+    - name: Build and Push Storage Server Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./storage-server
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/wavs-storage-server:latest
+          ${{ secrets.DOCKER_USERNAME }}/wavs-storage-server:${{ github.sha }}
+
+  deploy-server:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Heroku (Server)
+      uses: akhileshns/heroku-deploy@v3.12.12
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: "wavs-api-server"
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        appdir: "server"
+    
+    - name: Deploy to Heroku (Storage Server)
+      uses: akhileshns/heroku-deploy@v3.12.12
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: "wavs-storage-server"
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        appdir: "storage-server"
